@@ -25,7 +25,7 @@ export const PLANS: Plan[] = [
       { title: "Техника", text: "Базовые движения повторяются, пока не станут привычными." },
       { title: "Без перегрузки", text: "Объём растёт плавно, неделя за неделей." },
     ],
-    days: gen(4, [1, 3, 5], byStage([["first-touch", "soft-core", "plank-abc"], ["five-for-you", "easy-sides", "lower-start"], ["evening-ten", "balance-control", "straight-back"]], 4)),
+    days: gen(4, [1, 3, 5], byStage([["dummies", "2-min", "super-fast"], ["six-pack-women-edition", "lower-abs", "wake-up"], ["8-minutes", "get-ripped", "5-minute-plank"]], 4)),
   },
   {
     id: "lower-six",
@@ -39,7 +39,7 @@ export const PLANS: Plan[] = [
       { title: "Контроль", text: "Учит работать без прогиба в пояснице." },
       { title: "Прогрессия", text: "От новичкового до продвинутого уровня за 6 недель." },
     ],
-    days: gen(6, [1, 3, 5], byStage([["lower-start"], ["lower-two"], ["antigravity", "lower-two"]], 6)),
+    days: gen(6, [1, 3, 5], byStage([["lower-abs"], ["lower-abs-level-2"], ["lower-abs-level-2", "flat-belly"]], 6)),
   },
   {
     id: "plank-month",
@@ -53,7 +53,7 @@ export const PLANS: Plan[] = [
       { title: "Осанка", text: "Сильный корпус помогает держать спину ровно." },
       { title: "Мало времени", text: "Большинство занятий короче десяти минут." },
     ],
-    days: gen(4, [1, 2, 3, 4, 5], byStage([["plank-abc", "balance-control"], ["steel-belt", "plank-abc"], ["steel-belt"], ["iron-core", "steel-belt"]], 4)),
+    days: gen(4, [1, 2, 3, 4, 5], byStage([["5-minute-plank", "dummies"], ["5-minute-plank", "1-1"], ["creed"], ["spartan-ab", "5-minute-plank"]], 4)),
   },
   {
     id: "waist",
@@ -67,7 +67,7 @@ export const PLANS: Plan[] = [
       { title: "Вращение", text: "Корпус становится сильнее в поворотах." },
       { title: "Разнообразие", text: "Три уровня сложности в одной программе." },
     ],
-    days: gen(4, [1, 3, 5], byStage([["easy-sides", "five-for-you"], ["obliques-focus", "easy-sides"], ["obliques-focus"], ["obliques-pro", "obliques-focus"]], 4)),
+    days: gen(4, [1, 3, 5], byStage([["six-pack-women-edition", "1-1"], ["obliques", "ready-for-summer"], ["obliques"], ["oblique-level-2", "obliques"]], 4)),
   },
   {
     id: "cardio-core-6",
@@ -81,7 +81,7 @@ export const PLANS: Plan[] = [
       { title: "Энергозатраты", text: "Кардио-вставки увеличивают расход калорий." },
       { title: "Темп", text: "Интервалы учат держать ритм до конца." },
     ],
-    days: gen(6, [1, 2, 4, 6], byStage([["office-reboot", "morning-start"], ["cardio-core", "pulse-abs"], ["intervals-30-15", "cardio-core"], ["tabata-core", "intervals-30-15"]], 6)),
+    days: gen(6, [1, 2, 4, 6], byStage([["wake-up", "get-ripped"], ["fat-burn", "hottie"], ["2-2", "fat-burn"], ["insane", "2-2"]], 6)),
   },
   {
     id: "strength-eight",
@@ -95,7 +95,7 @@ export const PLANS: Plan[] = [
       { title: "Полный путь", text: "Проходит через весь каталог среднего и продвинутого уровня." },
       { title: "Результат", text: "К финалу вы пройдёте самый длинный комплекс." },
     ],
-    days: gen(8, [1, 2, 4, 5], byStage([["core-rhythm", "lower-two", "obliques-focus", "steel-belt"], ["eight", "circle-seven", "no-breaks", "abs-chest"], ["limit", "hundred", "iron-core", "double-round"], ["marathon", "final-boss", "abs-chest-pro", "obliques-pro"]], 8)),
+    days: gen(8, [1, 2, 4, 5], byStage([["creed", "six-pack", "obliques", "8-minutes-level-2"], ["abs-chest-level-2", "show-it-all", "lower-abs-level-2", "2-2"], ["flat-belly", "insane", "8-minutes-level-3", "spartan-ab"], ["insane-level-2", "six-pack-level-2", "3-3", "bruce-lee-abs"]], 8)),
   },
   {
     id: "morning-month",
@@ -108,6 +108,6 @@ export const PLANS: Plan[] = [
       { title: "Быстро", text: "Каждое занятие — несколько минут." },
       { title: "Регулярность", text: "Пять дней в неделю формируют привычку." },
     ],
-    days: gen(4, [1, 2, 3, 4, 5], (_w, i) => (i % 2 === 0 ? "morning-start" : "office-reboot")),
+    days: gen(4, [1, 2, 3, 4, 5], (_w, i) => (i % 2 === 0 ? "wake-up" : "2-min")),
   },
 ];
