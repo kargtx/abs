@@ -1,0 +1,19 @@
+# зависимости и сборка
+node_modules/
+dist/
+*.tsbuildinfo
+
+# локальные настройки
+.claude/
+web/.deploy.env
+.DS_Store
+Thumbs.db
+
+# материалы аналитика: не публикуются
+evidence/
+reverse/
+scripts/
+REPORT.md
+tz/screens/
+tz/ui/
+tz/video/
