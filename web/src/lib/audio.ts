@@ -312,8 +312,8 @@ export function currentVoice(uri = voiceURI, lang = voiceLang): SpeechSynthesisV
   );
 }
 
-/** Произнести фразу. queue — не прерывать текущую речь; rate — множитель скорости. */
-export function speak(text: string, opts: { queue?: boolean; rate?: number; force?: boolean } = {}) {
+/** Произнести фразу. queue — не прерывать текущую речь; rate — множитель скорости; noDuck — не приглушать музыку (для ритмичного счёта). */
+export function speak(text: string, opts: { queue?: boolean; rate?: number; force?: boolean; noDuck?: boolean } = {}) {
   if ((!voiceEnabled && !opts.force) || !("speechSynthesis" in window)) return;
   const u = new SpeechSynthesisUtterance(text);
   const v = currentVoice();
@@ -322,9 +322,11 @@ export function speak(text: string, opts: { queue?: boolean; rate?: number; forc
   u.volume = voiceVolume;
   u.rate = voiceRate * (opts.rate ?? 1);
   u.pitch = voicePitch;
-  u.onstart = () => music.duck(true);
-  u.onend = () => music.duck(false);
-  u.onerror = () => music.duck(false);
+  if (!opts.noDuck) {
+    u.onstart = () => music.duck(true);
+    u.onend = () => music.duck(false);
+    u.onerror = () => music.duck(false);
+  }
   // Safari иногда теряет фразу, если cancel() вызван без активной речи.
   if (!opts.queue && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
   speechSynthesis.speak(u);
@@ -337,6 +339,25 @@ export function stopSpeech() {
 
 const NUM_RU = ["", "Раз", "Два", "Три", "Четыре", "Пять", "Шесть", "Семь", "Восемь", "Девять", "Десять", "Одиннадцать", "Двенадцать",
   "Тринадцать", "Четырнадцать", "Пятнадцать", "Шестнадцать", "Семнадцать", "Восемнадцать", "Девятнадцать", "Двадцать"];
+
+const NUM_RU_TENS: Record<number, string> = {
+  10: "Десять",
+  20: "Двадцать",
+  30: "Тридцать",
+  40: "Сорок",
+  50: "Пятьдесят",
+  60: "Шестьдесят",
+  70: "Семьдесят",
+  80: "Восемьдесят",
+  90: "Девяносто",
+  100: "Сто",
+};
+
+/** Слово для круглой отметки повторов (10, 20, 30...). */
+export function countMilestoneWord(n: number, lang: "ru" | "en"): string {
+  if (lang === "en") return String(n);
+  return NUM_RU_TENS[n] ?? (NUM_RU[n] ?? String(n));
+}
 
 /** Слово для счёта повторов. */
 export function countWord(n: number, lang: "ru" | "en"): string {

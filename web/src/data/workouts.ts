@@ -15,11 +15,21 @@ export function parseSteps(src: string): Step[] {
     .filter(Boolean)
     .map((tok) => {
       const [id, raw] = tok.split(/\s+/);
-      const isTime = raw.endsWith("s");
-      const value = parseInt(raw, 10);
+      if (id === "rest") {
+        const value = parseInt(raw, 10);
+        return { kind: "rest", mode: "time", value } as Step;
+      }
+      let pace: number | undefined;
+      let valStr = raw;
+      if (raw.includes("@")) {
+        const [v, p] = raw.split("@");
+        valStr = v;
+        pace = parseFloat(p.endsWith("s") ? p.slice(0, -1) : p);
+      }
+      const isTime = valStr.endsWith("s");
+      const value = parseInt(valStr, 10);
       if (!Number.isFinite(value)) throw new Error(`Bad step: ${tok}`);
-      if (id === "rest") return { kind: "rest", mode: "time", value } as Step;
-      return { kind: "exercise", exerciseId: id, mode: isTime ? "time" : "reps", value } as Step;
+      return { kind: "exercise", exerciseId: id, mode: isTime ? "time" : "reps", value, pace } as Step;
     });
 }
 
@@ -80,6 +90,8 @@ const intermediate: Def[] = [
 ];
 
 const advanced: Def[] = [
+  ["insane-30min", "30-Minute Insane Abs", "Легендарный 30-минутный комплекс P4P из трёх уровней: 22 упражнения и 880 повторений.", "hiphop",
+    "leg-to-leg-crunch 30@1.5s, alt-crunch 30@1.5s, rest 30s, reach-crunch 30@1.5s, leg-raise-4 30@1.5s, rest 30s, thigh-crunch 30@1.5s, toe-touch 30@1.5s, rest 30s, cross-crunch 30@1.5s, double-crunch 30@1.5s, rest 30s, reach-crunch 40@1.5s, alt-crunch 40@1.5s, rest 15s, leg-raise-4 40@1.5s, cross-crunch 40@1.5s, rest 15s, toe-touch 40@1.5s, reverse-crunch 40@1.5s, rest 15s, double-crunch 40@1.5s, leg-to-leg-crunch 40@1.5s, rest 20s, vertical-leg-crunch 50@2s, rest 6s, dumbbell-crunch 50@2s, rest 6s, cross-crunch 50@2s, rest 6s, russian-twist 50@2s, rest 6s, leg-raise-4 50@2s, rest 6s, cross-scissors 50@2s"],
   ["flat-belly", "Flat Belly", "Длинная тренировка на весь пресс с частыми короткими паузами.", "groove",
     "jump-lunge 30s, crunch 20s, toe-touch 20s, oblique-roll-down 20s, jump-lunge 30s, crunch 20s, reverse-crunch 20s, leg-thrust 20s, high-knees 30s, leg-to-leg-crunch 20s, side-plank-elbow 20s, leg-thrust 20s, jump-lunge 30s, high-knees 30s, leg-raise-4 20s, vertical-leg-crunch 20s, reach-crunch 20s, plank 30s, side-plank-elbow 30s, russian-twist 20s, butt-kicks 45s, jump-lunge 45s, leg-thrust 20s, reverse-crunch 20s, plank 45s"],
   ["insane", "Insane", "Много упражнений, высокий объём, минимум отдыха.", "hiphop",

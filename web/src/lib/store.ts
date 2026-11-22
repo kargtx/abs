@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   favoriteMusic: [],
   workoutMusic: {},
   count: true,
+  countStyle: "cadence",
   tempo: 1,
   prep: 10,
   rate: 1.05,

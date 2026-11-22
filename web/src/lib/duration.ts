@@ -5,7 +5,7 @@ import type { Step, Workout } from "./types";
 export function stepSeconds(step: Step): number {
   if (step.kind === "rest" || step.mode === "time") return step.value;
   const ex = step.exerciseId ? EXERCISE_BY_ID[step.exerciseId] : undefined;
-  return step.value * (ex?.secondsPerRep ?? 2);
+  return step.value * (step.pace ?? ex?.secondsPerRep ?? 2);
 }
 
 export function totalSeconds(steps: Step[]): number {

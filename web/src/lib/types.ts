@@ -45,6 +45,8 @@ export interface Step {
   mode: StepMode;
   /** Повторы или секунды. */
   value: number;
+  /** Темп повторений, секунд на повтор (если задан для шага). */
+  pace?: number;
 }
 
 export interface Workout {
@@ -114,6 +116,8 @@ export interface Settings {
   workoutMusic: Record<string, string>;
   /** Считать повторы вслух. */
   count: boolean;
+  /** Стиль счёта: каденс «Раз-два» (P4P) или порядковые номера (1, 2, 3...). */
+  countStyle?: "cadence" | "ordinal";
   /** Множитель темпа счёта (1 — норма, <1 — быстрее). */
   tempo: number;
   /** Подготовка перед стартом, с. */

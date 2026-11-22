@@ -31,7 +31,7 @@ describe("content", () => {
       expect(MUSIC_BY_ID[w.defaultMusicId], w.id).toBeTruthy();
       for (const s of w.steps) if (s.kind === "exercise") expect(EXERCISE_BY_ID[s.exerciseId!], `${w.id}:${s.exerciseId}`).toBeTruthy();
       expect(durationMin(w)).toBeGreaterThanOrEqual(1);
-      expect(durationMin(w)).toBeLessThanOrEqual(25);
+      expect(durationMin(w)).toBeLessThanOrEqual(35);
     }
   });
 

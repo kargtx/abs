@@ -5,7 +5,7 @@ import { IconClose, IconNext, IconPause, IconPlay, IconPrev } from "../component
 import { EXERCISE_BY_ID } from "../data/exercises";
 import { NO_MUSIC } from "../data/music";
 import { BUILTIN_WORKOUTS } from "../data/workouts";
-import { audioCtx, audioReady, beep, configureVoice, countWord, music, releaseAudio, speak, stopSpeech, unlockAudio } from "../lib/audio";
+import { audioCtx, audioReady, beep, configureVoice, countMilestoneWord, countWord, music, releaseAudio, speak, stopSpeech, unlockAudio } from "../lib/audio";
 import { fmtClock, kcalFor } from "../lib/duration";
 import { exName, plural, useLang, useT } from "../lib/i18n";
 import { findWorkout, streak, useStore } from "../lib/store";
@@ -81,6 +81,7 @@ export function PlayerScreen() {
   const pausedAt = useRef<number | null>(null);
   const lastSec = useRef(-1);
   const rep = useRef(0);
+  const repPhase = useRef<{ rep: number; phase: 1 | 2 }>({ rep: 0, phase: 2 });
   const half = useRef(false);
   const mute = useRef(0);
   const spent = useRef<number[]>([]);
@@ -99,7 +100,7 @@ export function PlayerScreen() {
 
   const el = () => ((pausedAt.current ?? performance.now()) - stepStart.current) / 1000;
   const cur = seq[i];
-  const tempo = (ex: Exercise) => ex.secondsPerRep * (settings.tempo || 1);
+  const tempo = (ex: Exercise, step?: Step) => (step?.pace ?? ex.secondsPerRep) * (settings.tempo || 1);
   /** Шаг на повторы ведётся счётом: длительность = повторы × темп. */
   const pacedReps = (it: Item | undefined) => it?.type === "work" && it.step.mode === "reps" && settings.count && !it.ex.isStatic;
   const durOf = (it: Item | undefined): number => {
@@ -107,7 +108,7 @@ export function PlayerScreen() {
     if (it.type === "prep") return it.dur;
     if (it.type === "rest") return it.dur + extra;
     if (it.step.mode === "time") return it.step.value;
-    return pacedReps(it) ? LEAD + it.step.value * tempo(it.ex) : 0;
+    return pacedReps(it) ? LEAD + it.step.value * tempo(it.ex, it.step) : 0;
   };
   const counting = (it: Item | undefined) => it?.type === "work" && settings.count && !it.ex.isStatic;
 
@@ -145,6 +146,7 @@ export function PlayerScreen() {
     pausedAt.current = null;
     lastSec.current = -1;
     rep.current = 0;
+    repPhase.current = { rep: 0, phase: 2 };
     half.current = false;
     announce(seq[k]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,12 +199,43 @@ export function PlayerScreen() {
         }
         // Счёт повторов вслух.
         if (counting(cur)) {
-          const T = tempo(cur.ex);
-          const r = Math.floor((e - LEAD) / T + 0.5);
+          const T = tempo(cur.ex, cur.step);
+          const tWork = e - LEAD;
           const max = cur.step.mode === "reps" ? cur.step.value : Infinity;
-          if (r > rep.current && r <= max) {
-            rep.current = r;
-            if (now > mute.current && (cur.step.mode === "reps" || left > 1.5)) speak(countWord(r, lang), { rate: 1.15 });
+          if (tWork >= 0) {
+            const r = Math.floor(tWork / T) + 1;
+            const phaseTime = tWork - (r - 1) * T;
+            const halfThreshold = T * 0.45;
+
+            if (r <= max) {
+              if (settings.countStyle === "ordinal") {
+                if (r > repPhase.current.rep) {
+                  repPhase.current = { rep: r, phase: 1 };
+                  rep.current = r;
+                  if (now > mute.current && (cur.step.mode === "reps" || left > 1.5)) {
+                    speak(countWord(r, lang), { rate: 1.15 });
+                  }
+                }
+              } else {
+                // Стиль P4P: ритмичный каденс «Раз — два»
+                if (r > repPhase.current.rep) {
+                  repPhase.current = { rep: r, phase: 1 };
+                  rep.current = r;
+                  if (now > mute.current) {
+                    const isMilestone = (r % 10 === 0) || (cur.step.mode === "reps" && r === max);
+                    const word = isMilestone ? countMilestoneWord(r, lang) : (lang === "ru" ? "Раз" : "One");
+                    speak(word, { rate: 1.25, noDuck: true });
+                    if (settings.beeps) beep(920, 0.05, 0.25);
+                  }
+                } else if (r === repPhase.current.rep && repPhase.current.phase === 1 && phaseTime >= halfThreshold) {
+                  repPhase.current = { rep: r, phase: 2 };
+                  if (now > mute.current && left > 0.35) {
+                    speak(lang === "ru" ? "Два" : "Two", { rate: 1.25, noDuck: true });
+                    if (settings.beeps) beep(740, 0.05, 0.2);
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -212,7 +245,7 @@ export function PlayerScreen() {
     }, 100);
     return () => clearInterval(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done, paused, cur, i, extra, enter, lang, settings.count, settings.tempo]);
+  }, [done, paused, cur, i, extra, enter, lang, settings.count, settings.tempo, settings.countStyle, settings.beeps]);
 
   const togglePause = useCallback(() => {
     if (done) return;

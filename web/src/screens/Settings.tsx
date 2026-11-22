@@ -43,7 +43,10 @@ export function SettingsScreen() {
     unlockAudio();
     apply();
     beep();
-    speak(lang === "ru" ? "Приготовьтесь. Брюшное скручивание. Раз. Два. Три." : "Get ready. Crunch. One. Two. Three.", { force: true });
+    const phrase = s.countStyle === "ordinal"
+      ? (lang === "ru" ? "Приготовьтесь. Crunch. Раз. Два. Три." : "Get ready. Crunch. One. Two. Three.")
+      : (lang === "ru" ? "Приготовьтесь. Crunch. Раз, два. Раз, два." : "Get ready. Crunch. One, two. One, two.");
+    speak(phrase, { force: true });
   };
 
   const supportHref = `mailto:support@example.com?subject=${encodeURIComponent(`Пресс ${VERSION}`)}&body=${encodeURIComponent(
@@ -57,6 +60,19 @@ export function SettingsScreen() {
       <div className="section-t" style={{ marginTop: 0 }}>{t("voiceAndCount")}</div>
       <Toggle label={t("voiceHints")} checked={s.voiceHints} onChange={(v) => set({ voiceHints: v })} />
       <Toggle label={t("countAloud")} checked={s.count} onChange={(v) => set({ count: v })} />
+      {s.count && (
+        <div className="setrow">
+          <span>{t("countStyle")}</span>
+          <button
+            type="button"
+            className="chip active"
+            style={{ padding: "6px 12px", fontSize: 13, cursor: "pointer" }}
+            onClick={() => set({ countStyle: s.countStyle === "ordinal" ? "cadence" : "ordinal" })}
+          >
+            {s.countStyle === "ordinal" ? t("countStyleOrdinal") : t("countStyleCadence")}
+          </button>
+        </div>
+      )}
       <div className="setrow">
         <span>{t("countTempo")}</span>
         <Stepper value={tempoLabel} onDec={() => set({ tempo: clamp(s.tempo + 0.1, 0.5, 2) })} onInc={() => set({ tempo: clamp(s.tempo - 0.1, 0.5, 2) })} />
