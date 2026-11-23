@@ -46,7 +46,7 @@ function loop(ts: number) {
   registry.forEach((e) => {
     if (e.still || reduced) return;
     const c = e.clock ? e.clock() : ts / 1000;
-    if (c == null) return draw(e, 0);
+    if (c == null || c < 0) return draw(e, 0);
     draw(e, (1 - Math.cos((c / e.period) * Math.PI * 2)) / 2);
   });
   if (registry.size) requestAnimationFrame(loop);

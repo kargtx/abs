@@ -5,7 +5,7 @@ import { IconClose, IconNext, IconPause, IconPlay, IconPrev } from "../component
 import { EXERCISE_BY_ID } from "../data/exercises";
 import { NO_MUSIC } from "../data/music";
 import { BUILTIN_WORKOUTS } from "../data/workouts";
-import { audioCtx, audioReady, beep, configureVoice, countMilestoneWord, countWord, music, releaseAudio, speak, stopSpeech, unlockAudio } from "../lib/audio";
+import { audioCtx, audioReady, beep, configureVoice, countWord, music, releaseAudio, speak, stopSpeech, unlockAudio } from "../lib/audio";
 import { fmtClock, kcalFor } from "../lib/duration";
 import { exName, plural, useLang, useT } from "../lib/i18n";
 import { findWorkout, streak, useStore } from "../lib/store";
@@ -113,15 +113,26 @@ export function PlayerScreen() {
   const counting = (it: Item | undefined) => it?.type === "work" && settings.count && !it.ex.isStatic;
 
   const announce = useCallback((it: Item) => {
-    mute.current = performance.now() + 1500;
-    if (it.type === "prep") speak(lang === "ru" ? `Приготовьтесь. ${it.ex.nameEn}` : `Get ready. ${it.ex.nameEn}`);
-    else if (it.type === "rest") speak(lang === "ru" ? `Отдых.${it.next ? ` Далее — ${it.next.nameEn}` : ""}` : `Rest.${it.next ? ` Next: ${it.next.nameEn}` : ""}`);
-    else {
+    if (it.type === "prep") {
+      mute.current = performance.now() + 1500;
+      speak(lang === "ru" ? `Приготовьтесь. ${it.ex.nameEn}` : `Get ready. ${it.ex.nameEn}`);
+    } else if (it.type === "rest") {
+      mute.current = performance.now() + 1500;
+      speak(lang === "ru" ? `Отдых.${it.next ? ` Далее — ${it.next.nameEn}` : ""}` : `Rest.${it.next ? ` Next: ${it.next.nameEn}` : ""}`);
+    } else {
       beep(1180, 0.3, 0.3);
-      const val = it.step.mode === "reps" ? (lang === "ru" ? `, ${it.step.value} повторов` : `, ${it.step.value} reps`) : "";
-      speak((it.idx === 0 ? (lang === "ru" ? "Начали! " : "Go! ") : "") + exName(lang, it.ex) + val);
+      // Если включён ритмичный счёт («Раз — два»), звучит короткое «Начали!»
+      // чтобы фраза успела завершиться до подъёма (tWork = 0), когда сразу звучит «Раз».
+      if (settings.count && !it.ex.isStatic) {
+        mute.current = performance.now() + Math.min(800, (LEAD - 0.2) * 1000);
+        speak(lang === "ru" ? "Начали!" : "Go!");
+      } else {
+        mute.current = performance.now() + 1500;
+        const val = it.step.mode === "reps" ? (lang === "ru" ? `, ${it.step.value} повторов` : `, ${it.step.value} reps`) : "";
+        speak((it.idx === 0 ? (lang === "ru" ? "Начали! " : "Go! ") : "") + exName(lang, it.ex) + val);
+      }
     }
-  }, [lang]);
+  }, [lang, settings.count]);
 
   const finish = useCallback(() => {
     setDone(true);
@@ -205,7 +216,7 @@ export function PlayerScreen() {
           if (tWork >= 0) {
             const r = Math.floor(tWork / T) + 1;
             const phaseTime = tWork - (r - 1) * T;
-            const halfThreshold = T * 0.45;
+            const halfThreshold = T * 0.5;
 
             if (r <= max) {
               if (settings.countStyle === "ordinal") {
@@ -218,16 +229,16 @@ export function PlayerScreen() {
                 }
               } else {
                 // Стиль P4P: ритмичный каденс «Раз — два»
+                // Фаза 1: подъём (0 -> T/2) — звучит «Раз»
                 if (r > repPhase.current.rep) {
                   repPhase.current = { rep: r, phase: 1 };
                   rep.current = r;
                   if (now > mute.current) {
-                    const isMilestone = (r % 10 === 0) || (cur.step.mode === "reps" && r === max);
-                    const word = isMilestone ? countMilestoneWord(r, lang) : (lang === "ru" ? "Раз" : "One");
-                    speak(word, { rate: 1.25, noDuck: true });
+                    speak(lang === "ru" ? "Раз" : "One", { rate: 1.25, noDuck: true });
                     if (settings.beeps) beep(920, 0.05, 0.25);
                   }
                 } else if (r === repPhase.current.rep && repPhase.current.phase === 1 && phaseTime >= halfThreshold) {
+                  // Фаза 2: опускание (T/2 -> T) — звучит «Два»
                   repPhase.current = { rep: r, phase: 2 };
                   if (now > mute.current && left > 0.35) {
                     speak(lang === "ru" ? "Два" : "Two", { rate: 1.25, noDuck: true });
@@ -387,7 +398,7 @@ export function PlayerScreen() {
         {cur.type === "work" && cur.ex.bilateral && cur.step.mode === "time" && (
           <div className="side">{half.current ? t("side2") : t("side1")}</div>
         )}
-        <div className="figbox">{shownEx && <Fig key={shownEx.id + i} fig={shownEx.fig} period={tempo(shownEx)} clock={figClock} />}</div>
+        <div className="figbox">{shownEx && <Fig key={shownEx.id + i} fig={shownEx.fig} period={cur.type === "work" ? tempo(cur.ex, cur.step) : tempo(shownEx)} clock={figClock} />}</div>
         <div className="ringwrap">
           <svg viewBox="0 0 100 100">
             <circle cx="50" cy="50" r="44" fill="none" stroke="var(--line)" strokeWidth="7" />
