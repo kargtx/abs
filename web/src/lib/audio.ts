@@ -3,69 +3,119 @@ import { MUSIC_BY_ID, type MusicStyle } from "../data/music";
 let ctx: AudioContext | null = null;
 
 export function audioCtx(): AudioContext {
-  if (!ctx) ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-  if (ctx.state === "suspended") void ctx.resume();
-  return ctx;
+  if (!ctx && typeof window !== "undefined") {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (AC) ctx = new AC();
+  }
+  if (ctx && ctx.state === "suspended") {
+    void ctx.resume().catch(() => {});
+  }
+  return ctx!;
 }
 
 export function audioReady(): boolean {
   return !!ctx && ctx.state === "running";
 }
 
-/** Короткий беззвучный WAV: проигрывание через <audio> переводит iOS в режим «воспроизведение». */
-function silentWavUrl(): string {
-  const n = 4000; // 0,5 с при 8 кГц
-  const buf = new ArrayBuffer(44 + n);
-  const v = new DataView(buf);
-  const str = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
-  str(0, "RIFF"); v.setUint32(4, 36 + n, true); str(8, "WAVE"); str(12, "fmt ");
-  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
-  str(36, "data"); v.setUint32(40, n, true);
-  new Uint8Array(buf, 44).fill(128);
-  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
-}
+/**
+ * Валидный MP3 тишины (44.1 кГц стерео).
+ * Непрерывное фоновое воспроизведение через <audio> переводит сессию iOS в режим Media Playback,
+ * благодаря чему Web Audio и речь звучат даже при включенном аппаратном переключателе бесшумного режима (Mute switch).
+ */
+const SILENT_MP3 =
+  "data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////8AAABhTEFNRTMuMTAwA8MAAAAAAAAAABQgJAUHQQAB9AAAAnGMHkkIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQxAADgnABGiAAQBCqgCRMAAgEAH///////////////7+n/9FTuQsQH//////2NG0jWUGlio5gLQTOtIoeR2WX////X4s9Atb/JRVCbBUpeRUq//////////////////9RUi0f2jn/+xDECgPCjAEQAABN4AAANIAAAAQVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==";
 
 let keepAlive: HTMLAudioElement | null = null;
 
 /**
- * Разблокировка звука. Вызывать прямо в обработчике нажатия.
- * iOS Safari: AudioContext и синтез речи включаются только из жеста пользователя,
- * а Web Audio глушится переключателем «Без звука», если не перевести сессию в режим воспроизведения.
+ * Разблокировка звука. Вызывать прямо в синхронном обработчике нажатия пользователя (touch/click).
+ * iOS Safari:
+ * 1. AudioSession переводится в "playback" (Safari 17+).
+ * 2. Запускается HTML5 <audio> с тишиной (обходит аппаратный Silent Switch для Web Audio).
+ * 3. AudioContext создается и выводится из suspended внутри пользовательского жеста.
+ * 4. Сбрасывается зависшая очередь SpeechSynthesis и безопасно разблокируется TTS.
  */
 export function unlockAudio() {
+  if (typeof window === "undefined") return;
+
+  // 1. Safari 17+ / iOS 17+: аудиосессия воспроизведения
   try {
     const nav = navigator as Navigator & { audioSession?: { type: string } };
-    if (nav.audioSession) nav.audioSession.type = "playback"; // Safari 17+
+    if (nav.audioSession) nav.audioSession.type = "playback";
   } catch { /* не поддерживается */ }
+
+  // 2. Фоновый HTML5 audio для перевода iOS в media playback (обход Silent Switch)
   try {
     if (!keepAlive) {
-      keepAlive = new Audio(silentWavUrl());
+      keepAlive = new Audio(SILENT_MP3);
       keepAlive.loop = true;
+      keepAlive.preload = "auto";
       keepAlive.setAttribute("playsinline", "");
+      keepAlive.setAttribute("webkit-playsinline", "");
     }
     void keepAlive.play().catch(() => {});
   } catch { /* нет <audio> */ }
+
+  // 3. Web Audio: резюм контекста в жесте пользователя
   try {
     const c = audioCtx();
-    const b = c.createBuffer(1, 1, 22050);
-    const s = c.createBufferSource();
-    s.buffer = b;
-    s.connect(c.destination);
-    s.start(0);
+    if (c) {
+      if (c.state === "suspended") void c.resume().catch(() => {});
+      const b = c.createBuffer(1, 1, 22050);
+      const s = c.createBufferSource();
+      s.buffer = b;
+      s.connect(c.destination);
+      s.start(0);
+    }
   } catch { /* нет Web Audio */ }
+
+  // 4. Синтез речи: сброс зависшей очереди и прогрев
   try {
-    if ("speechSynthesis" in window && !speechSynthesis.speaking) {
-      const u = new SpeechSynthesisUtterance(" ");
-      u.volume = 0;
-      speechSynthesis.speak(u);
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      // На iOS WebKit пустая строка или пробел с volume=0 может зависнуть в pending навсегда.
+      // Знак "." с volume=0.01 отрабатывает нормальный жизненный цикл без звука и разблокирует TTS.
+      const u = new SpeechSynthesisUtterance(".");
+      u.volume = 0.01;
+      retainUtterance(u);
+      window.speechSynthesis.speak(u);
     }
   } catch { /* нет синтеза речи */ }
 }
 
-/** Остановить фоновый беззвучный трек (после тренировки). */
+/** Приостановить фоновый аудиотрек (после тренировки). */
 export function releaseAudio() {
-  keepAlive?.pause();
+  if (keepAlive) {
+    try {
+      keepAlive.pause();
+      keepAlive.currentTime = 0;
+    } catch {}
+  }
+}
+
+// Автоматический возврат AudioContext при касаниях и возврате на вкладку на iOS
+if (typeof window !== "undefined") {
+  const resumeOnInteraction = () => {
+    if (ctx && ctx.state === "suspended") {
+      void ctx.resume().catch(() => {});
+    }
+  };
+  window.addEventListener("touchstart", resumeOnInteraction, { passive: true });
+  window.addEventListener("touchend", resumeOnInteraction, { passive: true });
+  window.addEventListener("click", resumeOnInteraction, { passive: true });
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        if (ctx && ctx.state === "suspended") {
+          void ctx.resume().catch(() => {});
+        }
+        if (keepAlive && keepAlive.paused && ctx && ctx.state === "running") {
+          void keepAlive.play().catch(() => {});
+        }
+      }
+    });
+  }
 }
 
 const midiHz = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
@@ -107,7 +157,7 @@ class MusicEngine {
     this.bpm = def.bpm;
     this.volume = volume;
     this.master = c.createGain();
-    this.master.gain.value = 0;
+    this.master.gain.setValueAtTime(0, c.currentTime);
     this.master.connect(c.destination);
     this.master.gain.linearRampToValueAtTime(this.targetGain(), c.currentTime + 0.6);
     this.step = 0;
@@ -279,26 +329,47 @@ export function configureVoice(opts: { volume: number; enabled: boolean; beeps: 
 
 export function beep(freq = 880, dur = 0.12, level = 0.4) {
   if (!beepsEnabled) return;
-  const c = audioCtx();
-  const t = c.currentTime;
-  const o = c.createOscillator();
-  const g = c.createGain();
-  o.type = "sine";
-  o.frequency.value = freq;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(level * Math.max(0.05, voiceVolume), t + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(c.destination);
-  o.start(t);
-  o.stop(t + dur + 0.02);
+  try {
+    const c = audioCtx();
+    if (!c) return;
+    if (c.state === "suspended") void c.resume().catch(() => {});
+    const t = c.currentTime;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = "sine";
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(level * Math.max(0.05, voiceVolume), t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(c.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  } catch {
+    /* контекст недоступен или закрыт */
+  }
+}
+
+let cachedVoices: SpeechSynthesisVoice[] = [];
+
+function refreshVoices(): SpeechSynthesisVoice[] {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
+  try {
+    const v = window.speechSynthesis.getVoices();
+    if (v && v.length > 0) cachedVoices = v;
+  } catch { /* нет getVoices */ }
+  return cachedVoices;
+}
+
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  refreshVoices();
+  try {
+    window.speechSynthesis.addEventListener("voiceschanged", refreshVoices);
+    window.speechSynthesis.onvoiceschanged = refreshVoices;
+  } catch { /* */ }
 }
 
 export function listVoices(): SpeechSynthesisVoice[] {
-  try {
-    return speechSynthesis.getVoices() ?? [];
-  } catch {
-    return [];
-  }
+  return refreshVoices();
 }
 
 /** Выбранный голос, иначе лучший голос языка интерфейса. */
@@ -308,32 +379,111 @@ export function currentVoice(uri = voiceURI, lang = voiceLang): SpeechSynthesisV
   return (
     all.find((v) => v.voiceURI === uri) ??
     all.find((v) => v.lang.toLowerCase().startsWith(pre) && /google/i.test(v.name)) ??
+    all.find((v) => v.lang.toLowerCase().startsWith(pre) && /milena|yuri|katya|siri/i.test(v.name)) ??
     all.find((v) => v.lang.toLowerCase().startsWith(pre))
   );
 }
 
+// Защита от сборщика мусора iOS Safari (WebKit GC bug):
+// На iOS если не держать ссылку на utterance глобально, сборщик мусора JSC
+// уничтожает объект прямо посреди фразы, обрывая звук.
+const activeUtterances = new Set<SpeechSynthesisUtterance>();
+
+function retainUtterance(u: SpeechSynthesisUtterance) {
+  activeUtterances.add(u);
+  if (typeof window !== "undefined") {
+    (window as unknown as { __activeUtterance?: SpeechSynthesisUtterance }).__activeUtterance = u;
+  }
+
+  let timer: number | null = null;
+  const cleanup = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    activeUtterances.delete(u);
+    if (typeof window !== "undefined" && (window as unknown as { __activeUtterance?: SpeechSynthesisUtterance }).__activeUtterance === u) {
+      delete (window as unknown as { __activeUtterance?: SpeechSynthesisUtterance }).__activeUtterance;
+    }
+  };
+
+  // Предохранитель от зависших utterances (макс 15 сек на фразу)
+  timer = window.setTimeout(cleanup, 15000);
+
+  const prevEnd = u.onend;
+  const prevErr = u.onerror;
+  u.onend = (e) => {
+    cleanup();
+    prevEnd?.call(u, e);
+  };
+  u.onerror = (e) => {
+    cleanup();
+    prevErr?.call(u, e);
+  };
+}
+
+let speechTimer: number | null = null;
+
 /** Произнести фразу. queue — не прерывать текущую речь; rate — множитель скорости; noDuck — не приглушать музыку (для ритмичного счёта). */
 export function speak(text: string, opts: { queue?: boolean; rate?: number; force?: boolean; noDuck?: boolean } = {}) {
-  if ((!voiceEnabled && !opts.force) || !("speechSynthesis" in window)) return;
-  const u = new SpeechSynthesisUtterance(text);
+  const clean = text?.trim();
+  if (!clean || (!voiceEnabled && !opts.force) || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+  const u = new SpeechSynthesisUtterance(clean);
   const v = currentVoice();
   u.lang = v?.lang ?? voiceLang;
   if (v) u.voice = v;
-  u.volume = voiceVolume;
+  u.volume = Math.max(0.1, voiceVolume);
   u.rate = voiceRate * (opts.rate ?? 1);
   u.pitch = voicePitch;
+
   if (!opts.noDuck) {
     u.onstart = () => music.duck(true);
     u.onend = () => music.duck(false);
     u.onerror = () => music.duck(false);
   }
-  // Safari иногда теряет фразу, если cancel() вызван без активной речи.
-  if (!opts.queue && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
-  speechSynthesis.speak(u);
+
+  retainUtterance(u);
+
+  if (speechTimer) {
+    clearTimeout(speechTimer);
+    speechTimer = null;
+  }
+
+  const doSpeak = () => {
+    try {
+      window.speechSynthesis.speak(u);
+    } catch {
+      music.duck(false);
+    }
+  };
+
+  if (!opts.queue && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
+    // Safari / WebKit bug: вызов speak() на том же тике сразу после cancel() сбрасывает новую фразу.
+    // Короткий таймаут 30мс дает движку Safari освободить аудиоочередь.
+    speechTimer = window.setTimeout(doSpeak, 30);
+  } else {
+    doSpeak();
+  }
 }
 
 export function stopSpeech() {
-  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  if (speechTimer) {
+    clearTimeout(speechTimer);
+    speechTimer = null;
+  }
+  activeUtterances.clear();
+  if (typeof window !== "undefined") {
+    delete (window as unknown as { __activeUtterance?: SpeechSynthesisUtterance }).__activeUtterance;
+    if ("speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+  }
   music.duck(false);
 }
 
